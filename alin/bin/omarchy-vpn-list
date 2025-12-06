@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# Lists available VPN configurations (WireGuard and OpenVPN)
+# Uses sudo to read protected directories
+
+# WireGuard configs in /etc/wireguard/*.conf
+sudo find /etc/wireguard -maxdepth 1 -name '*.conf' 2>/dev/null | while read -r conf; do
+  basename "$conf" .conf
+done
+
+# OpenVPN client configs in /etc/openvpn/client/*.conf
+sudo find /etc/openvpn/client -maxdepth 1 -name '*.conf' 2>/dev/null | while read -r conf; do
+  basename "$conf" .conf
+done

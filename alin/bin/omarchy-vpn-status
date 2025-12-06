@@ -1,0 +1,19 @@
+#!/bin/bash
+
+# Waybar status indicator for VPN (WireGuard and OpenVPN)
+# Returns JSON with text (icon + name), tooltip, and class for styling
+
+# Check WireGuard
+ACTIVE_VPN=$(wg show interfaces 2>/dev/null | head -n1 | xargs)
+
+# Check OpenVPN if no WireGuard
+if [[ -z "$ACTIVE_VPN" ]]; then
+  ACTIVE_VPN=$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | \
+    grep 'openvpn-client@' | sed 's/openvpn-client@\([^.]*\)\.service.*/\1/' | head -n1 | xargs)
+fi
+
+if [[ -n "$ACTIVE_VPN" ]]; then
+  echo "{\"text\": \"󰌾 $ACTIVE_VPN\", \"tooltip\": \"Connected to $ACTIVE_VPN\", \"class\": \"connected\"}"
+else
+  echo "{\"text\": \"\"}"
+fi

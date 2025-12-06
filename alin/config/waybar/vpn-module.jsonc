@@ -1,0 +1,12 @@
+{
+  // VPN status module - add to modules-center in your waybar config
+  // Example: "modules-center": ["clock", "custom/vpn", "custom/update", ...]
+  
+  "custom/vpn": {
+    "exec": "$HOME/.local/bin/omarchy-vpn-status",
+    "return-type": "json",
+    "interval": 5,
+    "signal": 9,
+    "on-click": "$HOME/.local/bin/omarchy-vpn-menu"
+  }
+}

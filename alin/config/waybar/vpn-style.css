@@ -1,0 +1,9 @@
+/* VPN waybar styles - append to ~/.config/waybar/style.css */
+
+#custom-vpn {
+  margin-left: 8.75px;
+}
+
+#custom-vpn.connected {
+  color: #E0991C;
+}

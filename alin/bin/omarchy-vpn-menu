@@ -1,0 +1,51 @@
+#!/bin/bash
+
+# Standalone VPN menu - works independently of omarchy-menu
+# Press Super+Shift+V to open
+
+SCRIPT_DIR="$HOME/.local/bin"
+
+# Get currently active VPN
+get_active_vpn() {
+  local active
+  # Check WireGuard first
+  active=$(wg show interfaces 2>/dev/null | head -n1 | xargs)
+  # Check OpenVPN if no WireGuard
+  if [[ -z "$active" ]]; then
+    active=$(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | \
+      grep 'openvpn-client@' | sed 's/.*openvpn-client@\([^.]*\)\.service.*/\1/' | head -n1 | xargs)
+  fi
+  echo "$active"
+}
+
+# Build menu with walker
+show_menu() {
+  local vpn_list active_vpn preselect_args
+
+  vpn_list=$("$SCRIPT_DIR/omarchy-vpn-list")
+  
+  if [[ -z "$vpn_list" ]]; then
+    notify-send "VPN" "No VPN configurations found.\nAdd configs to /etc/wireguard/ or /etc/openvpn/client/"
+    exit 0
+  fi
+
+  active_vpn=$(get_active_vpn)
+  
+  # Calculate preselect index if there's an active VPN
+  if [[ -n "$active_vpn" ]]; then
+    local index
+    index=$(echo "$vpn_list" | grep -nxF "$active_vpn" | cut -d: -f1)
+    if [[ -n "$index" ]]; then
+      preselect_args="-c $index"
+    fi
+  fi
+
+  echo "$vpn_list" | walker --dmenu --width 295 --minheight 1 --maxheight 630 -p "VPN…" $preselect_args 2>/dev/null
+}
+
+# Main
+vpn=$(show_menu)
+
+if [[ -n "$vpn" && "$vpn" != "CNCLD" ]]; then
+  "$SCRIPT_DIR/omarchy-vpn-toggle" "$vpn"
+fi

@@ -1,0 +1,128 @@
+#!/bin/bash
+
+# Toggle VPN connection (supports WireGuard and OpenVPN)
+# Usage: omarchy-vpn-toggle <vpn-name>
+# - If the specified VPN is connected, disconnect it
+# - If another VPN is connected, disconnect it first, then connect the new one
+# - If no VPN is connected, connect the specified one
+#
+# Requires sudoers rule - run installer first
+
+VPN_NAME="$1"
+
+if [[ -z "$VPN_NAME" ]]; then
+  echo "Usage: omarchy-vpn-toggle <vpn-name>"
+  exit 1
+fi
+
+# Determine VPN type based on config location (needs sudo for protected dirs)
+get_vpn_type() {
+  local name="$1"
+  if sudo test -f "/etc/wireguard/${name}.conf"; then
+    echo "wireguard"
+  elif sudo test -f "/etc/openvpn/client/${name}.conf"; then
+    echo "openvpn"
+  else
+    echo "unknown"
+  fi
+}
+
+# Get all active WireGuard interfaces
+get_active_wireguard() {
+  wg show interfaces 2>/dev/null | xargs
+}
+
+# Get currently active OpenVPN client
+get_active_openvpn() {
+  systemctl list-units --type=service --state=running --no-legend 2>/dev/null | \
+    grep 'openvpn-client@' | sed 's/openvpn-client@\([^.]*\)\.service.*/\1/' | head -n1 | xargs
+}
+
+# Check if a specific VPN is active
+is_vpn_active() {
+  local name="$1"
+  local type
+  type=$(get_vpn_type "$name")
+  
+  case "$type" in
+    wireguard)
+      wg show interfaces 2>/dev/null | grep -qw "$name"
+      ;;
+    openvpn)
+      systemctl is-active "openvpn-client@${name}.service" &>/dev/null
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Disconnect a VPN
+disconnect_vpn() {
+  local name="$1"
+  local type
+  type=$(get_vpn_type "$name")
+  
+  case "$type" in
+    wireguard)
+      sudo wg-quick down "$name" 2>/dev/null
+      ;;
+    openvpn)
+      sudo systemctl stop "openvpn-client@${name}.service" 2>/dev/null
+      ;;
+  esac
+}
+
+# Connect a VPN
+connect_vpn() {
+  local name="$1"
+  local type
+  type=$(get_vpn_type "$name")
+  
+  case "$type" in
+    wireguard)
+      sudo wg-quick up "$name" 2>/dev/null
+      ;;
+    openvpn)
+      sudo systemctl start "openvpn-client@${name}.service" 2>/dev/null
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+# Disconnect all active VPNs
+disconnect_all() {
+  # Disconnect all WireGuard interfaces
+  for iface in $(wg show interfaces 2>/dev/null); do
+    sudo wg-quick down "$iface" 2>/dev/null
+  done
+  
+  # Disconnect all OpenVPN clients
+  for service in $(systemctl list-units --type=service --state=running --no-legend 2>/dev/null | grep 'openvpn-client@' | awk '{print $1}'); do
+    sudo systemctl stop "$service" 2>/dev/null
+  done
+}
+
+# Main logic
+if is_vpn_active "$VPN_NAME"; then
+  # Same VPN selected - disconnect it
+  if disconnect_vpn "$VPN_NAME"; then
+    notify-send "VPN Disconnected" "$VPN_NAME"
+  else
+    notify-send "VPN Error" "Could not disconnect $VPN_NAME"
+  fi
+else
+  # Different or no VPN - disconnect all and connect new
+  disconnect_all
+  
+  if connect_vpn "$VPN_NAME"; then
+    notify-send "VPN Connected" "$VPN_NAME"
+  else
+    notify-send "VPN Connection Failed" "Could not connect to $VPN_NAME"
+  fi
+fi
+
+# Signal waybar to refresh VPN status
+pkill -RTMIN+9 waybar
